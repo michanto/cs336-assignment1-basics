@@ -161,3 +161,9 @@ cython_debug/
 
 .ruff_cache/
 *.zip
+
+# MY ADDITIONS
+/data
+temp_tokenizer_config-merges.txt
+temp_tokenizer_config-vocab.json
+tokenizer.json

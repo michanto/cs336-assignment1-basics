@@ -1,13 +1,16 @@
 from __future__ import annotations
 
 import os
-from typing import IO, Any, BinaryIO
+from typing import IO, Any, BinaryIO, Tuple, Dict, List
 from collections.abc import Iterable
 from jaxtyping import Float, Int
 
 import numpy.typing as npt
 import torch
 from torch import Tensor
+
+from tokenizers import ByteLevelBPETokenizer
+from typing import Tuple, Dict, List
 
 
 
@@ -564,9 +567,9 @@ def get_tokenizer(
 def run_train_bpe(
     input_path: str | os.PathLike,
     vocab_size: int,
-    special_tokens: list[str],
+    special_tokens: List[str],
     **kwargs,
-) -> tuple[dict[int, bytes], list[tuple[bytes, bytes]]]:
+) -> Tuple[Dict[int, bytes], List[Tuple[bytes, bytes]]]:
     """Given the path to an input corpus, run train a BPE tokenizer and
     output its vocabulary and merges.
 
@@ -588,4 +591,45 @@ def run_train_bpe(
                 representing that <token1> was merged with <token2>.
                 Merges are ordered by order of creation.
     """
-    raise NotImplementedError
+    tokenizer = ByteLevelBPETokenizer(
+        add_prefix_space=False  # You can adjust this based on your needs
+    )
+
+    tokenizer.train(
+        files=str(input_path),
+        vocab_size=vocab_size,
+        special_tokens=special_tokens,
+        **kwargs,
+    )
+
+    vocab = tokenizer.get_vocab()
+
+    # Save the tokenizer config to get the merges file
+    temp_model_prefix = "temp_tokenizer"
+    tokenizer.save_model(".", temp_model_prefix)
+    merges_path = f"{temp_model_prefix}-merges.txt"
+
+    merges: List[str] = []
+    try:
+        with open(merges_path, "r", encoding="utf-8") as f:
+            next(f)  # Skip the header
+            for line in f:
+                merges.append(line.strip())
+    except FileNotFoundError:
+        merges = []
+
+    # Clean up the temporary files
+    vocab_path = f"{temp_model_prefix}-vocab.json"
+    try:
+        os.remove(vocab_path)
+        os.remove(merges_path)
+    except FileNotFoundError:
+        pass
+
+    # Convert vocab keys to integers and values to bytes
+    processed_vocab = {i: token.encode('utf-8') for token, i in vocab.items()}
+
+    # Convert merge strings to bytes
+    processed_merges = [tuple(merge.encode('utf-8') for merge in pair.split()) for pair in merges]
+
+    return processed_vocab, processed_merges
